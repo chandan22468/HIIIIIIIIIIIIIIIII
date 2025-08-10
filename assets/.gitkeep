@@ -1,0 +1,9 @@
+This folder can hold optional art and sounds.
+Expected (optional) filenames:
+- board.png
+- red_piece.png
+- green_piece.png
+- blue_piece.png
+- yellow_piece.png
+- die1.png .. die6.png
+- roll.wav, move.wav, knock.wav, win.wav
