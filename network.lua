@@ -49,9 +49,9 @@ local function randomRoomCode()
   return table.concat(s)
 end
 
-local function broadcast(host, packet, reliable)
-  if host and host.peers then
-    for _, peer in ipairs(host.peers) do
+local function broadcast(peers, packet, reliable)
+  if peers then
+    for _, peer in ipairs(peers) do
       peer:send(packet, reliable and "reliable" or "unreliable")
     end
   end
@@ -115,9 +115,9 @@ local function deliverSnapshot(self)
     -- Client shouldn't call this
     return
   end
-  if self.mode == "host" and self.host and self.host.peers then
+  if self.mode == "host" and self.host and self.host_peers then
     local msg = jencode({type="state_update", payload=snapshot})
-    broadcast(self.host, msg, true)
+    broadcast(self.host_peers, msg, true)
   end
   if self.callbacks.on_state then self.callbacks.on_state(snapshot) end
 end
@@ -157,8 +157,8 @@ local function startHost(self, totalPlayers)
 
   if enetAvailable then
     self.host = enet.host_create(("*:%d"):format(self.port))
-    self.host.roomCode = self.roomCode
-    self.host.peers = {}
+    self.roomCode = self.roomCode
+    self.host_peers = {}
     log("Hosting on port", self.port, "room", self.roomCode)
   else
     log("ENet not available; running in local-only mode")
@@ -262,11 +262,11 @@ local function handleHostPacket(self, event)
     local color = ({"red","green","blue","yellow"})[((seat-1)%4)+1]
     local p = Player.new{color=color, seat=seat, name=msg.payload.name or ("P"..seat), isAI=false}
     table.insert(self.players, p)
-    table.insert(self.host.peers, event.peer)
+    table.insert(self.host_peers, event.peer)
     event.peer:send(jencode({type="join_response", payload={ok=true, seat=seat, room=self.roomCode}}), "reliable")
     deliverSnapshot(self)
   elseif msg.type == "chat" then
-    broadcast(self.host, event.data, true)
+    broadcast(self.host_peers, event.data, true)
     if self.callbacks.on_chat then self.callbacks.on_chat(msg.payload) end
   elseif msg.type == "roll_request" then
     serverRoll(self, msg.payload.playerID)
@@ -319,7 +319,7 @@ function M.leave()
   end
   if M.host then
     if M.mode == "host" and enetAvailable then
-      for _, peer in ipairs(M.host.peers or {}) do peer:disconnect() end
+      for _, peer in ipairs(M.host_peers or {}) do peer:disconnect() end
       M.host:destroy()
     else
       if M.peer then M.peer:disconnect() end
@@ -369,7 +369,7 @@ function M.chat(text)
   if M.mode == "client" then
     if M.peer then M.peer:send(jencode(msg), "reliable") end
   elseif M.mode == "host" and M.host then
-    broadcast(M.host, jencode(msg), true)
+    broadcast(M.host_peers, jencode(msg), true)
     if M.callbacks.on_chat then M.callbacks.on_chat(msg.payload) end
   else
     if M.callbacks.on_chat then M.callbacks.on_chat({from="you", text=text}) end
